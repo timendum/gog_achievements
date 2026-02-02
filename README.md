@@ -28,30 +28,51 @@ go build -o gog-achievements.exe main.go
 
 ## Usage
 
+### List all owned games
+
+```bash
+./gog-achievements.exe
+```
+
 ### View all achievements for a game
 
 ```bash
-./gog-achievements.exe <product_id>
-# or
-./gog-achievements.exe -product-id=<product_id>
+./gog-achievements.exe <game-id>
 ```
 
-### Unlock a specific achievement
+### Unlock one or more achievements
 
 ```bash
-./gog-achievements.exe <product_id> -a <achievement_id>
-# or
-./gog-achievements.exe -product-id=<product_id> -achievement-id=<achievement_id>
+./gog-achievements.exe <game-id> <achievement-id> [achievement-id] ...
 ```
 
-## Example
+### Enable verbose logging
+
+Add the `-v` flag to any command to enable verbose logging:
 
 ```bash
-# List achievements for Hollow Knight: Silksong (product ID 1558393671)
+./gog-achievements.exe -v
+./gog-achievements.exe <game-id> -v
+./gog-achievements.exe <game-id> <achievement-id> -v
+```
+
+## Examples
+
+```bash
+# List all games you own
+./gog-achievements.exe
+
+# List achievements for Hollow Knight: Silksong (game ID 1558393671)
 ./gog-achievements.exe 1558393671
 
 # Unlock achievement Fanatic (ID 58889697238411342)
-./gog-achievements.exe 1558393671 -a 58889697238411342
+./gog-achievements.exe 1558393671 58889697238411342
+
+# Unlock multiple achievements at once
+./gog-achievements.exe 1558393671 58889697238411342 12345678901234567
+
+# List achievements with verbose output
+./gog-achievements.exe 1558393671 -v
 ```
 
 ## How it works

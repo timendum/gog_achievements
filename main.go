@@ -285,12 +285,19 @@ func listGames(authResp AuthResponse) {
 
 func main() {
 	var cli struct {
-		GameID        string `arg:"" optional:"" help:"Game ID (leave empty to list owned games)"`
-		AchievementID string `arg:"" optional:"" help:"Achievement ID to unlock (requires GameID), leave empty to list game achievements"`
-		Verbose       bool   `flag:"-v" help:"Enable verbose logging"`
+		GameID         string   `arg:"" optional:"" help:"Game ID (leave empty to list owned games)"`
+		AchievementIDs []string `arg:"" name:"achievement-id" optional:"" help:"Achievement IDs to unlock (requires GameID), leave empty to list game achievements"`
+		Verbose        bool     `short:"v" help:"Enable verbose logging"`
 	}
 
-	ctx := kong.Parse(&cli)
+	ctx := kong.Parse(&cli,
+		kong.Name("gog-achievements"),
+		kong.Description("An app to manage GOG Achievements:"+
+			"\n\n- Without arguments, the app will list all games you own."+
+			"\n\n- With a <game-id> the app will list all achievements of the game."+
+			"\n\n- With a <game-id> and at least one <achievement-id>, the app will unlock the achievements."),
+		kong.UsageOnError(),
+	)
 	verbose = cli.Verbose
 
 	refreshToken, err := getRefreshToken()
@@ -325,14 +332,16 @@ func main() {
 	}
 
 	// With achievement ID: unlock achievement
-	if cli.AchievementID != "" {
-		logf("Unlocking achievement mode for game: %s, achievement: %s", cli.GameID, cli.AchievementID)
-		err := unlockAchievement(cli.GameID, authResp.UserID, cli.AchievementID, refreshToken, nil)
-		if err != nil {
-			fmt.Printf("Failed to unlock achievement: %v\n", err)
-			return
+	if len(cli.AchievementIDs) > 0 {
+		for _, AchievementID := range cli.AchievementIDs {
+			logf("Unlocking achievement mode for game: %s, achievement: %s", cli.GameID, AchievementID)
+			err := unlockAchievement(cli.GameID, authResp.UserID, AchievementID, refreshToken, nil)
+			if err != nil {
+				fmt.Printf("Failed to unlock achievement: %v\n", err)
+				return
+			}
+			fmt.Printf("Achievement %s unlocked successfully!\n", AchievementID)
 		}
-		fmt.Println("Achievement unlocked successfully!")
 		return
 	}
 	listAchievements(cli.GameID, *authResp)
