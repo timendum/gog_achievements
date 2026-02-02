@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alecthomas/kong"
 	"golang.org/x/sys/windows/registry"
 )
 
@@ -450,28 +450,126 @@ func unlockAchievement(productID, userID, achievementID, refreshToken string, da
 	return nil
 }
 
+func listAchievements(gameId string, authResp AuthResponse) {
+	// With game ID only: list achievements
+	logf("Listing achievements mode for game: %s", gameId)
+	achievements, err := getAchievements(gameId, authResp.UserID, authResp.AccessToken)
+	if err != nil {
+		fmt.Printf("Failed to get achievements: %v\n", err)
+		return
+	}
+
+	unlockedCount := 0
+	lockedCount := 0
+
+	fmt.Println("Unlocked Achievements:")
+	for _, ach := range achievements {
+		if ach.DateUnlocked != nil {
+			fmt.Printf("- %s: %s = %s\n", ach.AchievementID, ach.Name, ach.Description)
+			unlockedCount++
+		}
+	}
+
+	fmt.Println("\nTo be unlocked Achievements:")
+	for _, ach := range achievements {
+		if ach.DateUnlocked == nil {
+			fmt.Printf("- %s: %s = %s\n", ach.AchievementID, ach.Name, ach.Description)
+			lockedCount++
+		}
+	}
+
+	logf("Summary: %d unlocked, %d locked", unlockedCount, lockedCount)
+}
+
+type GetGamesResponse struct {
+	Owned []int `json:"owned"`
+}
+
+type GameDetail struct {
+	Title  string `json:"title"`
+	Type   string `json:"type"`
+	Builds []struct {
+		ID int64 `json:"id"`
+	}
+	ID                    int         `json:"id"`
+	ImageBackground       string      `json:"image_background"`
+	ImageBoxart           string      `json:"image_boxart"`
+	ImageGalaxyBackground string      `json:"image_galaxy_background"`
+	ImageIcon             string      `json:"image_icon"`
+	ImageIconSquare       interface{} `json:"image_icon_square"`
+	ImageLogo             string      `json:"image_logo"`
+	IncludesGames         []int       `json:"includes_games"`
+}
+
+func listGames(authResp AuthResponse) {
+	req, err := http.NewRequest("GET", "https://embed.gog.com/user/data/games", nil)
+	if err != nil {
+		logf("Failed to create request: %v", err)
+		return
+	}
+
+	req.Header.Set("Authorization", "Bearer "+authResp.AccessToken)
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		logf("Failed to send getFilteredProducts request: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		logf("Failed to list games - status code: %d, response: %s", resp.StatusCode, string(bodyBytes))
+		return
+	}
+	var getGames GetGamesResponse
+	if err := json.NewDecoder(resp.Body).Decode(&getGames); err != nil {
+		logf("Failed to decode list games response: %v", err)
+		return
+	}
+
+	logf("Successfully retrieved %d game ids", len(getGames.Owned))
+	for _, productID := range getGames.Owned {
+		req, err = http.NewRequest("GET", fmt.Sprintf("https://www.gogdb.org/data/products/%d/product.json", productID), nil)
+		if err != nil {
+			logf("Failed to create request: %v", err)
+			return
+		}
+		resp, err = httpClient.Do(req)
+		if err != nil {
+			logf("Failed to send gameDetails for %d request: %v", productID, err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode == http.StatusNotFound {
+			// Game not found, it happens :(
+			logf("Game %d not found", productID)
+			continue
+		}
+		if resp.StatusCode != http.StatusOK {
+			bodyBytes, _ := io.ReadAll(resp.Body)
+			logf("Failed to get game details for %d - status code: %d, response: %s", productID, resp.StatusCode, string(bodyBytes))
+			return
+		}
+		var gameDetail GameDetail
+		if err := json.NewDecoder(resp.Body).Decode(&gameDetail); err != nil {
+			logf("Failed to decode game Detail for %d response: %v", productID, err)
+			return
+		}
+		if len(gameDetail.Builds) == 0 {
+			logf("- %d is empty, skipped: %s", productID, gameDetail.Title)
+			continue
+		}
+		fmt.Printf("- %d: %s\n", productID, gameDetail.Title)
+	}
+}
+
 func main() {
-	productID := flag.String("product-id", "", "Product id (from gogdb.org)")
-	achievementID := flag.String("achievement-id", "", "Achievement id to be unlocked")
-	flag.StringVar(achievementID, "a", "", "Achievement id to be unlocked (shorthand)")
-	flag.BoolVar(&verbose, "v", false, "Enable verbose logging")
-	flag.Parse()
-
-	// If product-id not provided as flag, check positional args
-	if *productID == "" && flag.NArg() > 0 {
-		*productID = flag.Arg(0)
+	var cli struct {
+		GameID        string `arg:"" optional:"" help:"Game ID (leave empty to list owned games)"`
+		AchievementID string `arg:"" optional:"" help:"Achievement ID to unlock (requires GameID), leave empty to list game achievements"`
+		Verbose       bool   `flag:"-v" help:"Enable verbose logging"`
 	}
 
-	if *productID == "" {
-		fmt.Println("Error: product-id is required")
-		flag.Usage()
-		os.Exit(1)
-	}
-
-	logf("Starting GOG achievements program for product ID: %s", *productID)
-	if *achievementID != "" {
-		logf("Achievement ID specified: %s", *achievementID)
-	}
+	ctx := kong.Parse(&cli)
+	verbose = cli.Verbose
 
 	refreshToken, err := getRefreshToken()
 	if err != nil {
@@ -497,41 +595,25 @@ func main() {
 
 	logf("Successfully authenticated, user ID: %s", authResp.UserID)
 
-	if *achievementID == "" {
-		logf("Listing achievements mode")
-		achievements, err := getAchievements(*productID, authResp.UserID, authResp.AccessToken)
-		if err != nil {
-			fmt.Printf("Failed to get achievements: %v\n", err)
-			return
-		}
+	// No arguments: retrieve owned games
+	if cli.GameID == "" {
+		logf("Listing owned games mode")
+		listGames(*authResp)
+		return
+	}
 
-		unlockedCount := 0
-		lockedCount := 0
-
-		fmt.Println("Unlocked Achievements:")
-		for _, ach := range achievements {
-			if ach.DateUnlocked != nil {
-				fmt.Printf("- %s: %s = %s\n", ach.AchievementID, ach.Name, ach.Description)
-				unlockedCount++
-			}
-		}
-
-		fmt.Println("\nTo be unlocked Achievements:")
-		for _, ach := range achievements {
-			if ach.DateUnlocked == nil {
-				fmt.Printf("- %s: %s = %s\n", ach.AchievementID, ach.Name, ach.Description)
-				lockedCount++
-			}
-		}
-
-		logf("Summary: %d unlocked, %d locked", unlockedCount, lockedCount)
-	} else {
-		logf("Unlocking achievement mode")
-		err := unlockAchievement(*productID, authResp.UserID, *achievementID, refreshToken, nil)
+	// With achievement ID: unlock achievement
+	if cli.AchievementID != "" {
+		logf("Unlocking achievement mode for game: %s, achievement: %s", cli.GameID, cli.AchievementID)
+		err := unlockAchievement(cli.GameID, authResp.UserID, cli.AchievementID, refreshToken, nil)
 		if err != nil {
 			fmt.Printf("Failed to unlock achievement: %v\n", err)
 			return
 		}
 		fmt.Println("Achievement unlocked successfully!")
+		return
 	}
+	listAchievements(cli.GameID, *authResp)
+
+	_ = ctx // silence unused variable warning
 }
