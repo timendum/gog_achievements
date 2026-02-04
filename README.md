@@ -46,6 +46,12 @@ go build -o gog-achievements.exe main.go
 ./gog-achievements.exe <game-id> <achievement-id> [achievement-id] ...
 ```
 
+### Clear one or more achievements
+
+```bash
+./gog-achievements.exe <game-id> -c <achievement-id> [achievement-id] ...
+```
+
 ### Enable verbose logging
 
 Add the `-v` flag to any command to enable verbose logging:

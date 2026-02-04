@@ -136,13 +136,13 @@ func getAchievements(productID, userID, accessToken string) ([]Achievement, erro
 	return achResp.Items, nil
 }
 
+type AchievementReqBody struct {
+	DateUnlocked *string `json:"date_unlocked"`
+}
+
 // unlockAchievement unlocks a specific achievement
 func unlockAchievement(productID, userID, achievementID, refreshToken string, dateUnlocked *time.Time) error {
 	logf("Attempting to unlock achievement: %s for user: %s, product: %s", achievementID, userID, productID)
-	if dateUnlocked == nil {
-		now := time.Now().UTC().Add(-3 * time.Second)
-		dateUnlocked = &now
-	}
 
 	clientID, clientSecret, err := getProductData(productID)
 	if err != nil {
@@ -156,8 +156,13 @@ func unlockAchievement(productID, userID, achievementID, refreshToken string, da
 		return err
 	}
 
-	body := map[string]string{
-		"date_unlocked": dateUnlocked.Format("2006-01-02T15:04:05-0700"),
+	body := AchievementReqBody{
+		DateUnlocked: nil,
+	}
+
+	if dateUnlocked != nil {
+		dateUnlocked := dateUnlocked.Format("2006-01-02T15:04:05-0700")
+		body.DateUnlocked = &dateUnlocked
 	}
 	bodyBytes, err := json.Marshal(body)
 	if err != nil {
@@ -288,6 +293,7 @@ func main() {
 		GameID         string   `arg:"" optional:"" help:"Game ID (leave empty to list owned games)"`
 		AchievementIDs []string `arg:"" name:"achievement-id" optional:"" help:"Achievement IDs to unlock (requires GameID), leave empty to list game achievements"`
 		Verbose        bool     `short:"v" help:"Enable verbose logging"`
+		Clear          bool     `short:"c" help:"Clear (delete) achievements"`
 	}
 
 	ctx := kong.Parse(&cli,
@@ -295,7 +301,8 @@ func main() {
 		kong.Description("An app to manage GOG Achievements:"+
 			"\n\n- Without arguments, the app will list all games you own."+
 			"\n\n- With a <game-id> the app will list all achievements of the game."+
-			"\n\n- With a <game-id> and at least one <achievement-id>, the app will unlock the achievements."),
+			"\n\n- With a <game-id> and at least one <achievement-id>, the app will unlock the achievements."+
+			"\n\n- With a <game-id>, flag '-c' and at least one <achievement-id>, the app will clear (lock) the achievements."),
 		kong.UsageOnError(),
 	)
 	verbose = cli.Verbose
@@ -333,9 +340,14 @@ func main() {
 
 	// With achievement ID: unlock achievement
 	if len(cli.AchievementIDs) > 0 {
+		now := time.Now().UTC().Add(-3 * time.Second)
 		for _, AchievementID := range cli.AchievementIDs {
+			dateUnlocked := &now
+			if cli.Clear {
+				dateUnlocked = nil
+			}
 			logf("Unlocking achievement mode for game: %s, achievement: %s", cli.GameID, AchievementID)
-			err := unlockAchievement(cli.GameID, authResp.UserID, AchievementID, refreshToken, nil)
+			err := unlockAchievement(cli.GameID, authResp.UserID, AchievementID, refreshToken, dateUnlocked)
 			if err != nil {
 				fmt.Printf("Failed to unlock achievement: %v\n", err)
 				return
