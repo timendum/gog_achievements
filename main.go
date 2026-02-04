@@ -343,16 +343,18 @@ func main() {
 		now := time.Now().UTC().Add(-3 * time.Second)
 		for _, AchievementID := range cli.AchievementIDs {
 			dateUnlocked := &now
+			verb := "unlock"
 			if cli.Clear {
 				dateUnlocked = nil
+				verb = "clear"
 			}
 			logf("Unlocking achievement mode for game: %s, achievement: %s", cli.GameID, AchievementID)
 			err := unlockAchievement(cli.GameID, authResp.UserID, AchievementID, refreshToken, dateUnlocked)
 			if err != nil {
-				fmt.Printf("Failed to unlock achievement: %v\n", err)
+				fmt.Printf("Failed to %s achievement: %v\n", verb, err)
 				return
 			}
-			fmt.Printf("Achievement %s unlocked successfully!\n", AchievementID)
+			fmt.Printf("Achievement %s %sed successfully!\n", verb, AchievementID)
 		}
 		return
 	}
