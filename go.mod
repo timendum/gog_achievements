@@ -1,6 +1,6 @@
-module gog-achievements
+module github.com/timendum/gog-achievements
 
-go 1.21
+go 1.23
 
 require golang.org/x/sys v0.28.0
 
