@@ -85,7 +85,7 @@ func getProductData(productID string) (string, string, error) {
 }
 
 // getAchievements retrieves achievements for a product
-func GetAchievements(productID, userID, accessToken string) ([]Achievement, error) {
+func GetAchievements(productID string, userID, accessToken string) ([]Achievement, error) {
 	Logf("Fetching achievements for product ID: %s, user ID: %s", productID, userID)
 	clientID, _, err := getProductData(productID)
 	if err != nil {
@@ -130,7 +130,7 @@ type AchievementReqBody struct {
 }
 
 // unlockAchievement unlocks a specific achievement
-func UnlockAchievement(productID, userID, achievementID, refreshToken string, dateUnlocked *time.Time) error {
+func UnlockAchievement(productID string, userID, achievementID, refreshToken string, dateUnlocked *time.Time) error {
 	Logf("Attempting to unlock achievement: %s for user: %s, product: %s", achievementID, userID, productID)
 
 	clientID, clientSecret, err := getProductData(productID)
