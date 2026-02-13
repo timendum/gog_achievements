@@ -340,8 +340,10 @@ func runUI() {
 							}()...)
 						}),
 						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							dims := layout.Spacer{Height: unit.Dp(rowGapDp)}.Layout(gtx)
+							defer clip.Rect{Max: dims.Size}.Push(gtx.Ops).Pop()
 							paint.Fill(gtx.Ops, color.NRGBA{R: 255, G: 255, B: 255, A: 255})
-							return layout.Spacer{Height: unit.Dp(rowGapDp)}.Layout(gtx)
+							return dims
 						}),
 					)
 				}) // end grid inset
