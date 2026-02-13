@@ -41,13 +41,13 @@ type gameItem struct {
 
 	// === Protected by mu - safe for concurrent access during async loading ===
 	mu            sync.RWMutex
-	title         string // game title; initially the id string; replaced when details load
-	detailLoaded  bool   // flag: game details (title, image URL) have been fetched
-	detailLoading bool   // flag: detail fetch is currently in progress
-	imageURL      string // URL to game's promotional image for display
-	imgLoaded     bool   // flag: image has been decoded and is ready for rendering
-	imgLoading    bool   // flag: image download/decode is in progress
-	imgErr        error  // stores any error from image fetch/decode for debugging
+	title         string        // game title; initially the id string; replaced when details load
+	detailLoaded  bool          // flag: game details (title, image URL) have been fetched
+	detailLoading bool          // flag: detail fetch is currently in progress
+	imageURL      string        // URL to game's promotional image for display
+	imgLoaded     bool          // flag: image has been decoded and is ready for rendering
+	imgLoading    bool          // flag: image download/decode is in progress
+	imgErr        error         // stores any error from image fetch/decode for debugging
 	imgOp         paint.ImageOp // gioui paint operation containing the decoded image data for rendering
 }
 
@@ -64,7 +64,7 @@ func newGameItem(id int) *gameItem {
 // These methods safely read gameItem state with mutex protection.
 
 // Title returns the current game title for display (thread-safe read).
-func (g *gameItem) Title() string  { g.mu.RLock(); defer g.mu.RUnlock(); return g.title }
+func (g *gameItem) Title() string { g.mu.RLock(); defer g.mu.RUnlock(); return g.title }
 
 // HasImage checks if image is ready for rendering (thread-safe read).
 func (g *gameItem) HasImage() bool { g.mu.RLock(); defer g.mu.RUnlock(); return g.imgLoaded }
@@ -200,8 +200,8 @@ func fetchImage(url string) (image.Image, error) {
 // while runUI() executes in a separate goroutine to build and render the UI.
 
 func main() {
-	go runUI()       // start UI rendering goroutine
-	app.Main()       // start gioui framework and event loop (blocks)
+	go runUI() // start UI rendering goroutine
+	app.Main() // start gioui framework and event loop (blocks)
 }
 
 // runUI initializes the gioui Window and auth, then runs the main event loop.
@@ -259,6 +259,8 @@ func runUI() {
 	var searchEditor widget.Editor
 	searchEditor.SingleLine = true
 	var searchText string
+	searchNext := 0
+	var searchNextButton widget.Clickable
 
 	for {
 		// ===== Main Event Loop =====
@@ -275,23 +277,6 @@ func runUI() {
 			// Frame event: window needs rendering (resize, invalidation, animation frame, etc.)
 			// gtx: gioui context for this frame; records operations into ops buffer
 			gtx := app.NewContext(&ops, e)
-
-			if searchEditor.Text() != searchText {
-				searchText = searchEditor.Text()
-				if searchText != "" {
-					avail := max(gtx.Constraints.Max.X, 1)
-					cardWpx := gtx.Dp(unit.Dp(220))
-					cardGapPx := gtx.Dp(unit.Dp(12))
-					cols := max(int(float32(avail+cardGapPx)/float32(cardWpx+cardGapPx)), 1)
-					for i, item := range items {
-						if strings.Contains(strings.ToLower(item.Title()), strings.ToLower(searchText)) {
-							rowList.Position.First = i / cols
-							rowList.Position.Offset = 0
-							break
-						}
-					}
-				}
-			}
 
 			// ===== Grid Layout Configuration =====
 			// Responsive grid: cards rearrange based on window width
@@ -310,15 +295,43 @@ func runUI() {
 			cardGapPx := gtx.Dp(unit.Dp(cardGapDp))
 
 			// Calculate responsive grid: how many card columns fit in available width?
-			avail := max(gtx.Constraints.Max.X,1) // available width in pixels
+			avail := max(gtx.Constraints.Max.X, 1)                                   // available width in pixels
 			cols := max(int(float32(avail+cardGapPx)/float32(cardWpx+cardGapPx)), 1) // columns per row
 			n := len(*games)                                                         // total games
 			rows := max(int(math.Ceil(float64(n)/float64(cols))), 1)                 // rows needed to fit all games
+
+			if searchEditor.Text() != searchText {
+				searchText = searchEditor.Text()
+				searchNext = 0
+				if searchText != "" {
+					for i, item := range items {
+						if strings.Contains(strings.ToLower(item.Title()), strings.ToLower(searchText)) {
+							rowList.Position.First = i / cols
+							rowList.Position.Offset = 0
+							break
+						}
+					}
+				}
+			} else if searchNext < 0 && searchText != "" {
+				count := 0
+				for i, item := range items {
+					if strings.Contains(strings.ToLower(item.Title()), strings.ToLower(searchText)) {
+						count++
+						if count == -searchNext {
+							rowList.Position.First = i / cols
+							rowList.Position.Offset = 0
+							break
+						}
+					}
+				}
+				searchNext = -searchNext
+			}
 
 			// Convert rowList to a material.List for styled scrolling with material theme
 			mList := material.List(th, &rowList)
 			mList.AnchorStrategy = material.Overlay // keep scroll position stable during updates
 
+			// Grey row
 			layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 					return layout.Background{}.Layout(gtx,
@@ -337,6 +350,10 @@ func runUI() {
 									layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 										return material.Editor(th, &searchEditor, "").Layout(gtx)
 									}),
+									layout.Rigid(layout.Spacer{Width: unit.Dp(8)}.Layout),
+									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+										return material.Button(th, &searchNextButton, "Next").Layout(gtx)
+									}),
 								)
 							})
 						},
@@ -344,55 +361,55 @@ func runUI() {
 				}),
 				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 					return layout.Inset{Top: unit.Dp(8), Left: unit.Dp(8), Right: unit.Dp(8)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				// mList.Layout renders all rows; calls rowHeight callback for each visible/needed row
-				return mList.Layout(gtx, rows, func(gtx layout.Context, row int) layout.Dimensions {
-					return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return layout.Flex{Axis: layout.Horizontal}.Layout(gtx, func() []layout.FlexChild {
-						children := make([]layout.FlexChild, 0, cols*2-1)
-					// Build FlexChild array alternating cards and gaps
-					// Pattern: [Card1, Gap, Card2, Gap, Card3, ...] (no gap after last column)
-					for c := range cols {
-						idx := row*cols + c // linear index into items array
-							if idx >= n {
-							// Game slot beyond total count: add empty spacer to maintain row alignment
-								children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-									gtx.Constraints.Min.X, gtx.Constraints.Max.X = cardWpx, cardWpx
-									return layout.Dimensions{Size: image.Pt(cardWpx, 0)}
-								}))
-							} else {
-								it := items[idx]
-							// Render gameCard with fixed width
-							children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-								// Lock card width; height determined by gameCard content
-									gtx.Constraints.Min.X, gtx.Constraints.Max.X = cardWpx, cardWpx
-									return gameCard(th, w, it,
-										unit.Dp(cardPadDp),
-										unit.Dp(imgHeightDp),
-										unit.Dp(badgePadDp),
-										unit.Dp(radiusDp),
-									)(gtx)
-								}))
-							}
-							// Add horizontal gap between cards (except after last column)
-							if c != cols-1 {
-								children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-									return layout.Spacer{Width: unit.Dp(cardGapDp)}.Layout(gtx)
-								}))
-							}
-						}
-								return children
-							}()...)
-						}),
-						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							dims := layout.Spacer{Height: unit.Dp(rowGapDp)}.Layout(gtx)
-							defer clip.Rect{Max: dims.Size}.Push(gtx.Ops).Pop()
-							paint.Fill(gtx.Ops, color.NRGBA{R: 255, G: 255, B: 255, A: 255})
-							return dims
-						}),
-					)
-				})
-				})
+						// mList.Layout renders all rows; calls rowHeight callback for each visible/needed row
+						return mList.Layout(gtx, rows, func(gtx layout.Context, row int) layout.Dimensions {
+							return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+									return layout.Flex{Axis: layout.Horizontal}.Layout(gtx, func() []layout.FlexChild {
+										children := make([]layout.FlexChild, 0, cols*2-1)
+										// Build FlexChild array alternating cards and gaps
+										// Pattern: [Card1, Gap, Card2, Gap, Card3, ...] (no gap after last column)
+										for c := range cols {
+											idx := row*cols + c // linear index into items array
+											if idx >= n {
+												// Game slot beyond total count: add empty spacer to maintain row alignment
+												children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+													gtx.Constraints.Min.X, gtx.Constraints.Max.X = cardWpx, cardWpx
+													return layout.Dimensions{Size: image.Pt(cardWpx, 0)}
+												}))
+											} else {
+												it := items[idx]
+												// Render gameCard with fixed width
+												children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+													// Lock card width; height determined by gameCard content
+													gtx.Constraints.Min.X, gtx.Constraints.Max.X = cardWpx, cardWpx
+													return gameCard(th, w, it,
+														unit.Dp(cardPadDp),
+														unit.Dp(imgHeightDp),
+														unit.Dp(badgePadDp),
+														unit.Dp(radiusDp),
+													)(gtx)
+												}))
+											}
+											// Add horizontal gap between cards (except after last column)
+											if c != cols-1 {
+												children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+													return layout.Spacer{Width: unit.Dp(cardGapDp)}.Layout(gtx)
+												}))
+											}
+										}
+										return children
+									}()...)
+								}),
+								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+									dims := layout.Spacer{Height: unit.Dp(rowGapDp)}.Layout(gtx)
+									defer clip.Rect{Max: dims.Size}.Push(gtx.Ops).Pop()
+									paint.Fill(gtx.Ops, color.NRGBA{R: 255, G: 255, B: 255, A: 255})
+									return dims
+								}),
+							)
+						})
+					})
 				}),
 			)
 
@@ -429,7 +446,7 @@ func gameCard(th *material.Theme, w *app.Window, it *gameItem,
 		r := gtx.Dp(radius)
 		defer clip.RRect{
 			Rect: image.Rectangle{Max: gtx.Constraints.Max}, // fill entire card area
-			NE:   r, NW: r, SE: r, SW: r,                     // rounded corners
+			NE:   r, NW: r, SE: r, SW: r,                    // rounded corners
 		}.Push(gtx.Ops).Pop()
 		paint.Fill(gtx.Ops, color.NRGBA{R: 225, G: 225, B: 225, A: 255})
 
