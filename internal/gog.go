@@ -224,6 +224,7 @@ func GetGameDetail(productID int) *GameDetail {
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		Logf("Failed to send gameDetails for %d request: %v", productID, err)
+		return nil
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusNotFound {
