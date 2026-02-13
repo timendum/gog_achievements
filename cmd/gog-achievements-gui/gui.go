@@ -339,7 +339,10 @@ func runUI() {
 								return children
 							}()...)
 						}),
-						layout.Rigid(layout.Spacer{Height: unit.Dp(rowGapDp)}.Layout),
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							paint.Fill(gtx.Ops, color.NRGBA{R: 255, G: 255, B: 255, A: 255})
+							return layout.Spacer{Height: unit.Dp(rowGapDp)}.Layout(gtx)
+						}),
 					)
 				}) // end grid inset
 			})
