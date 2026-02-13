@@ -286,15 +286,11 @@ func runUI() {
 			// Convert device-independent pixels (Dp) to pixels based on screen DPI
 			cardWpx := gtx.Dp(unit.Dp(cardWidthDp))
 			cardGapPx := gtx.Dp(unit.Dp(cardGapDp))
-			rowGapPx := gtx.Dp(unit.Dp(rowGapDp))
 
 			// Calculate responsive grid: how many card columns fit in available width?
-			avail := gtx.Constraints.Max.X // available width in pixels
-			if avail == 0 {
-				avail = 1 // safety: avoid division by zero
-			}
+			avail := max(gtx.Constraints.Max.X,1) // available width in pixels
 			cols := max(int(float32(avail+cardGapPx)/float32(cardWpx+cardGapPx)), 1) // columns per row
-			n := len(*games)                                                           // total games
+			n := len(*games)                                                         // total games
 			rows := max(int(math.Ceil(float64(n)/float64(cols))), 1)                 // rows needed to fit all games
 
 			// Convert rowList to a material.List for styled scrolling with material theme
@@ -305,16 +301,9 @@ func runUI() {
 			layout.Inset{Top: unit.Dp(8), Left: unit.Dp(8), Right: unit.Dp(8)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				// mList.Layout renders all rows; calls rowHeight callback for each visible/needed row
 				return mList.Layout(gtx, rows, func(gtx layout.Context, row int) layout.Dimensions {
-				// Add vertical gap between rows (deferred to run after row is laid out)
-				defer func() {
-					if row != rows-1 {
-						// Spacer below this row to next row
-						layout.Spacer{Height: unit.Dp(unit.Dp(rowGapDp))}.Layout(gtx)
-					}
-				}()
-
-				// Row layout: horizontally arrange up to `cols` game cards
-					return layout.Flex{Axis: layout.Horizontal}.Layout(gtx, func() []layout.FlexChild {
+					return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							return layout.Flex{Axis: layout.Horizontal}.Layout(gtx, func() []layout.FlexChild {
 						children := make([]layout.FlexChild, 0, cols*2-1)
 					// Build FlexChild array alternating cards and gaps
 					// Pattern: [Card1, Gap, Card2, Gap, Card3, ...] (no gap after last column)
@@ -347,8 +336,11 @@ func runUI() {
 								}))
 							}
 						}
-						return children
-					}()...)
+								return children
+							}()...)
+						}),
+						layout.Rigid(layout.Spacer{Height: unit.Dp(rowGapDp)}.Layout),
+					)
 				}) // end grid inset
 			})
 
