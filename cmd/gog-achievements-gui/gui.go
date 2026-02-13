@@ -8,6 +8,7 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -255,6 +256,10 @@ func runUI() {
 	var rowList widget.List
 	rowList.Axis = layout.Vertical
 
+	var searchEditor widget.Editor
+	searchEditor.SingleLine = true
+	var searchText string
+
 	for {
 		// ===== Main Event Loop =====
 		// Process gioui events (window lifecycle, frame requests, user input)
@@ -270,6 +275,23 @@ func runUI() {
 			// Frame event: window needs rendering (resize, invalidation, animation frame, etc.)
 			// gtx: gioui context for this frame; records operations into ops buffer
 			gtx := app.NewContext(&ops, e)
+
+			if searchEditor.Text() != searchText {
+				searchText = searchEditor.Text()
+				if searchText != "" {
+					avail := max(gtx.Constraints.Max.X, 1)
+					cardWpx := gtx.Dp(unit.Dp(220))
+					cardGapPx := gtx.Dp(unit.Dp(12))
+					cols := max(int(float32(avail+cardGapPx)/float32(cardWpx+cardGapPx)), 1)
+					for i, item := range items {
+						if strings.Contains(strings.ToLower(item.Title()), strings.ToLower(searchText)) {
+							rowList.Position.First = i / cols
+							rowList.Position.Offset = 0
+							break
+						}
+					}
+				}
+			}
 
 			// ===== Grid Layout Configuration =====
 			// Responsive grid: cards rearrange based on window width
@@ -297,8 +319,31 @@ func runUI() {
 			mList := material.List(th, &rowList)
 			mList.AnchorStrategy = material.Overlay // keep scroll position stable during updates
 
-			// Add padding around entire card grid
-			layout.Inset{Top: unit.Dp(8), Left: unit.Dp(8), Right: unit.Dp(8)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return layout.Background{}.Layout(gtx,
+						func(gtx layout.Context) layout.Dimensions {
+							defer clip.Rect{Max: gtx.Constraints.Max}.Push(gtx.Ops).Pop()
+							paint.Fill(gtx.Ops, color.NRGBA{R: 200, G: 200, B: 200, A: 255})
+							return layout.Dimensions{Size: image.Pt(gtx.Constraints.Max.X, gtx.Constraints.Min.Y)}
+						},
+						func(gtx layout.Context) layout.Dimensions {
+							return layout.Inset{Top: unit.Dp(8), Bottom: unit.Dp(8), Left: unit.Dp(8), Right: unit.Dp(8)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+								return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+										return material.Body1(th, "Search:").Layout(gtx)
+									}),
+									layout.Rigid(layout.Spacer{Width: unit.Dp(8)}.Layout),
+									layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+										return material.Editor(th, &searchEditor, "").Layout(gtx)
+									}),
+								)
+							})
+						},
+					)
+				}),
+				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+					return layout.Inset{Top: unit.Dp(8), Left: unit.Dp(8), Right: unit.Dp(8)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				// mList.Layout renders all rows; calls rowHeight callback for each visible/needed row
 				return mList.Layout(gtx, rows, func(gtx layout.Context, row int) layout.Dimensions {
 					return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
@@ -346,8 +391,10 @@ func runUI() {
 							return dims
 						}),
 					)
-				}) // end grid inset
-			})
+				})
+				})
+				}),
+			)
 
 			// Flush ops buffer: render all recorded drawing operations to the window
 			e.Frame(gtx.Ops)
