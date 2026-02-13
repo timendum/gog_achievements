@@ -49,6 +49,7 @@ type gameItem struct {
 	imgLoading    bool          // flag: image download/decode is in progress
 	imgErr        error         // stores any error from image fetch/decode for debugging
 	imgOp         paint.ImageOp // gioui paint operation containing the decoded image data for rendering
+	highlighted   bool          // flag
 }
 
 // newGameItem creates a new empty game card state.
@@ -259,7 +260,8 @@ func runUI() {
 	var searchEditor widget.Editor
 	searchEditor.SingleLine = true
 	var searchText string
-	searchNext := 0
+	// last index of games matched for search
+	searchLastIdx := -1
 	var searchNextButton widget.Clickable
 
 	for {
@@ -302,29 +304,31 @@ func runUI() {
 
 			if searchEditor.Text() != searchText {
 				searchText = searchEditor.Text()
-				searchNext = 0
+				searchLastIdx = -1
 				if searchText != "" {
 					for i, item := range items {
 						if strings.Contains(strings.ToLower(item.Title()), strings.ToLower(searchText)) {
 							rowList.Position.First = i / cols
 							rowList.Position.Offset = 0
+							searchLastIdx = i
 							break
 						}
 					}
 				}
-			} else if searchNext < 0 && searchText != "" {
-				count := 0
-				for i, item := range items {
+			}
+			if searchNextButton.Clicked(gtx) && searchText != "" {
+				searchLastIdx = searchLastIdx + 1
+				for i := range items {
+					item := items[(i+searchLastIdx)%n]
 					if strings.Contains(strings.ToLower(item.Title()), strings.ToLower(searchText)) {
-						count++
-						if count == -searchNext {
-							rowList.Position.First = i / cols
-							rowList.Position.Offset = 0
-							break
-						}
+						//real idx on games and items
+						i = (searchLastIdx + i) % n
+						rowList.Position.First = i / cols
+						rowList.Position.Offset = 0
+						searchLastIdx = i
+						break
 					}
 				}
-				searchNext = -searchNext
 			}
 
 			// Convert rowList to a material.List for styled scrolling with material theme
@@ -379,6 +383,7 @@ func runUI() {
 												}))
 											} else {
 												it := items[idx]
+												it.highlighted = (idx == searchLastIdx)
 												// Render gameCard with fixed width
 												children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 													// Lock card width; height determined by gameCard content
@@ -482,6 +487,9 @@ func gameCard(th *material.Theme, w *app.Window, it *gameItem,
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 						// Create styled body text from theme
 						t := material.Body1(th, it.Title())
+						if it.highlighted {
+							t = material.Body1(th, fmt.Sprintf("*%s*", it.Title()))
+						}
 						t.MaxLines = 2 // truncate long titles to 2 lines
 						return t.Layout(gtx)
 					}),
