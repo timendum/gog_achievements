@@ -101,7 +101,7 @@ func SaveAccessToConfig(clientID string, authResp *AuthResponse) error {
 }
 
 // GetProductDataFromConfig retrieves access token from config if not expired
-func GetProductDataFromConfig(productID string) (*ProductDetails, error) {
+func GetProductDataFromConfig(productID int) (*ProductDetails, error) {
 	configPath := GetProductPath()
 	data, err := os.ReadFile(configPath)
 	if err != nil {
@@ -113,7 +113,7 @@ func GetProductDataFromConfig(productID string) (*ProductDetails, error) {
 		return nil, err
 	}
 
-	var config map[string]ProductDetails
+	var config map[int]ProductDetails
 	if err := json.Unmarshal(data, &config); err != nil {
 		Logf("Failed to unmarshal config: %v", err)
 		return nil, err
@@ -127,9 +127,9 @@ func GetProductDataFromConfig(productID string) (*ProductDetails, error) {
 	return &productDetails, nil
 }
 
-func SaveProductDataToConfig(productID string, productDetails *ProductDetails) error {
+func SaveProductDataToConfig(productID int, productDetails *ProductDetails) error {
 	configPath := GetProductPath()
-	config := make(map[string]ProductDetails)
+	config := make(map[int]ProductDetails)
 
 	data, err := os.ReadFile(configPath)
 	if err == nil {

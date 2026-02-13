@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/timendum/gog-achievements/internal"
@@ -9,7 +10,7 @@ import (
 	"github.com/alecthomas/kong"
 )
 
-func listAchievements(gameId string, authResp internal.AuthResponse) {
+func listAchievements(gameId int, authResp internal.AuthResponse) {
 	// With game ID only: list achievements
 	internal.Logf("Listing achievements mode for game: %s", gameId)
 	achievements, err := internal.GetAchievements(gameId, authResp.UserID, authResp.AccessToken)
@@ -104,6 +105,11 @@ func main() {
 		listGames(*authResp)
 		return
 	}
+	gameID, err := strconv.Atoi(cli.GameID)
+	if err != nil {
+		fmt.Printf("Error parsing game-id: %v\n", err)
+		return
+	}
 
 	// With achievement ID: unlock achievement
 	if len(cli.AchievementIDs) > 0 {
@@ -116,7 +122,7 @@ func main() {
 				verb = "clear"
 			}
 			internal.Logf("Unlocking achievement mode for game: %s, achievement: %s", cli.GameID, AchievementID)
-			err := internal.UnlockAchievement(cli.GameID, authResp.UserID, AchievementID, refreshToken, dateUnlocked)
+			err := internal.UnlockAchievement(gameID, authResp.UserID, AchievementID, refreshToken, dateUnlocked)
 			if err != nil {
 				fmt.Printf("Failed to %s achievement: %v\n", verb, err)
 				return
@@ -125,7 +131,7 @@ func main() {
 		}
 		return
 	}
-	listAchievements(cli.GameID, *authResp)
+	listAchievements(gameID, *authResp)
 
 	_ = ctx // silence unused variable warning
 }

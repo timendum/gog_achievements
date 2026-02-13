@@ -178,17 +178,10 @@ func main() {
 }
 
 func runUI() {
-	window := new(app.Window)
+	w := new(app.Window)
 
-	window.Option(app.Title("Gog Achievements Manager"))
-	window.Option(app.Size(unit.Dp(1000), unit.Dp(700)))
-
-	var ops op.Ops
-	th := material.NewTheme()
-
-	// Scrollable list of "rows"; each row will contain N cards (columns).
-	var rowList widget.List
-	rowList.Axis = layout.Vertical
+	w.Option(app.Title("Gog Achievements Manager"))
+	w.Option(app.Size(unit.Dp(1000), unit.Dp(700)))
 
 	// Load GOG data
 	refreshToken, err := internal.GetRefreshToken()
@@ -222,9 +215,16 @@ func runUI() {
 		items = append(items, newGameItem(id))
 	}
 
+	var ops op.Ops
+	th := material.NewTheme()
+
+	// Scrollable list of "rows"; each row will contain N cards (columns).
+	var rowList widget.List
+	rowList.Axis = layout.Vertical
+
 	for {
 		// Main GUI Loop
-		switch e := window.Event().(type) {
+		switch e := w.Event().(type) {
 		case app.DestroyEvent:
 			if e.Err != nil {
 				log.Println("Error:", e.Err)
@@ -254,15 +254,9 @@ func runUI() {
 			if avail == 0 {
 				avail = 1
 			}
-			cols := int(float32(avail+cardGapPx) / float32(cardWpx+cardGapPx))
-			if cols < 1 {
-				cols = 1
-			}
+			cols := max(int(float32(avail+cardGapPx)/float32(cardWpx+cardGapPx)), 1)
 			n := len(*games)
-			rows := int(math.Ceil(float64(n) / float64(cols)))
-			if rows < 1 {
-				rows = 1
-			}
+			rows := max(int(math.Ceil(float64(n)/float64(cols))), 1)
 
 			// Scrollable list of rows
 			mList := material.List(th, &rowList)
@@ -281,7 +275,7 @@ func runUI() {
 					// Row layout: horizontally place up to `cols` cards
 					return layout.Flex{Axis: layout.Horizontal}.Layout(gtx, func() []layout.FlexChild {
 						children := make([]layout.FlexChild, 0, cols*2-1)
-						for c := 0; c < cols; c++ {
+						for c := range cols {
 							idx := row*cols + c
 							if idx >= n {
 								// Fill remaining space with empty rigid so row stays aligned
@@ -294,7 +288,7 @@ func runUI() {
 								children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 									// fix width for each card
 									gtx.Constraints.Min.X, gtx.Constraints.Max.X = cardWpx, cardWpx
-									return gameCard(th, window, it,
+									return gameCard(th, w, it,
 										unit.Dp(cardPadDp),
 										unit.Dp(imgHeightDp),
 										unit.Dp(badgePadDp),
@@ -340,7 +334,7 @@ func gameCard(th *material.Theme, w *app.Window, it *gameItem,
 			Rect: image.Rectangle{Max: gtx.Constraints.Max},
 			NE:   r, NW: r, SE: r, SW: r,
 		}.Push(gtx.Ops).Pop()
-		paint.Fill(gtx.Ops, color.NRGBA{R: 25, G: 25, B: 25, A: 255})
+		paint.Fill(gtx.Ops, color.NRGBA{R: 225, G: 225, B: 225, A: 255})
 
 		return it.click.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			return layout.UniformInset(pad).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
@@ -357,7 +351,7 @@ func gameCard(th *material.Theme, w *app.Window, it *gameItem,
 									return img.Layout(gtx)
 								}
 								// placeholder background while loading
-								paint.Fill(gtx.Ops, color.NRGBA{R: 40, G: 40, B: 40, A: 255})
+								paint.Fill(gtx.Ops, color.NRGBA{R: 200, G: 200, B: 200, A: 255})
 								return layout.Dimensions{Size: image.Pt(gtx.Constraints.Min.X, h)}
 							}),
 						)

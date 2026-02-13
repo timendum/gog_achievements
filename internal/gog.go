@@ -15,12 +15,12 @@ var httpClient = &http.Client{
 }
 
 // getProductData retrieves product data from GOGDB
-func getProductData(productID string) (string, string, error) {
+func getProductData(productID int) (string, string, error) {
 	cached, err := GetProductDataFromConfig(productID)
 	if err == nil && cached != nil {
 		return cached.ClientID, cached.ClientSecret, nil
 	}
-	resp, err := httpClient.Get(fmt.Sprintf("https://www.gogdb.org/data/products/%s/product.json", productID))
+	resp, err := httpClient.Get(fmt.Sprintf("https://www.gogdb.org/data/products/%d/product.json", productID))
 	if err != nil {
 		Logf("Failed to fetch product data: %v", err)
 		return "", "", err
@@ -47,7 +47,7 @@ func getProductData(productID string) (string, string, error) {
 	}
 
 	if len(validBuilds) == 0 {
-		Logf("No valid builds found for product ID: %s", productID)
+		Logf("No valid builds found for product ID: %d", productID)
 		return "", "", fmt.Errorf("no valid builds found")
 	}
 
@@ -60,7 +60,7 @@ func getProductData(productID string) (string, string, error) {
 	Logf("Found latest build ID: %d (published: %s)", latestBuildID, validBuilds[0].DatePublished)
 
 	// Get build details
-	resp, err = httpClient.Get(fmt.Sprintf("https://www.gogdb.org/data/products/%s/builds/%d.json", productID, latestBuildID))
+	resp, err = httpClient.Get(fmt.Sprintf("https://www.gogdb.org/data/products/%d/builds/%d.json", productID, latestBuildID))
 	if err != nil {
 		Logf("Failed to fetch build details: %v", err)
 		return "", "", err
@@ -85,8 +85,8 @@ func getProductData(productID string) (string, string, error) {
 }
 
 // getAchievements retrieves achievements for a product
-func GetAchievements(productID string, userID, accessToken string) ([]Achievement, error) {
-	Logf("Fetching achievements for product ID: %s, user ID: %s", productID, userID)
+func GetAchievements(productID int, userID, accessToken string) ([]Achievement, error) {
+	Logf("Fetching achievements for product ID: %d, user ID: %s", productID, userID)
 	clientID, _, err := getProductData(productID)
 	if err != nil {
 		Logf("Failed to get product data: %v", err)
@@ -130,8 +130,8 @@ type AchievementReqBody struct {
 }
 
 // unlockAchievement unlocks a specific achievement
-func UnlockAchievement(productID string, userID, achievementID, refreshToken string, dateUnlocked *time.Time) error {
-	Logf("Attempting to unlock achievement: %s for user: %s, product: %s", achievementID, userID, productID)
+func UnlockAchievement(productID int, userID, achievementID, refreshToken string, dateUnlocked *time.Time) error {
+	Logf("Attempting to unlock achievement: %s for user: %s, product: %d", achievementID, userID, productID)
 
 	clientID, clientSecret, err := getProductData(productID)
 	if err != nil {
@@ -216,7 +216,6 @@ func ListOwnedGameIDs(authResp AuthResponse) *[]int {
 }
 
 func GetGameDetail(productID int) *GameDetail {
-
 	req, err := http.NewRequest("GET", fmt.Sprintf("https://www.gogdb.org/data/products/%d/product.json", productID), nil)
 	if err != nil {
 		Logf("Failed to create request: %v", err)
